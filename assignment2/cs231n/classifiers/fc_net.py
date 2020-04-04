@@ -371,12 +371,15 @@ class FullyConnectedNet(object):
 
         return loss, grads
 
-    def affine_bn_relu_forward(self, x, w, b, gamma, beta, bn_param):
+    def affine_bn_relu_forward(self, x, w, b, gamma, beta, bn_param, dropout):
       """
-      Convenience layer that perorms an affine transform followed by BN and ReLU
+      Convenience layer that perorms an affine transform followed by BN and ReLU.
+      **UPDATE** now includes also dropout
       Inputs:
       - x: Input to the affine layer
       - w, b: Weights for the affine layer
+      - gamma, beta, bn_param: parameters for the batch-normalization
+      - dropout: parameter for the dropout
 
       Returns a tuple of:
       - out: Output from the ReLU
@@ -384,8 +387,9 @@ class FullyConnectedNet(object):
       """
       fc_out, fc_cache = affine_forward(x, w, b)
       bn_out, bn_cache = batchnorm_forward(fc_out, gamma, beta, bn_param)
-      out, relu_cache = relu_forward(bn_out)
-      cache = (fc_cache, bn_cache, relu_cache)
+      relu_out, relu_cache = relu_forward(bn_out)
+      out, do_cache = dropout_forward(relu_out, dropout)
+      cache = (fc_cache, bn_cache, relu_cache, do_cache)
       return out, cache
 
 
@@ -393,8 +397,9 @@ class FullyConnectedNet(object):
       """
       Backward pass for the affine-bn-relu convenience layer
       """
-      fc_cache, bn_cache, relu_cache = cache
-      d_bn_out = relu_backward(dout, relu_cache)
+      fc_cache, bn_cache, relu_cache, do_cache = cache
+      d_relu_out = dropout_backward(dout, do_cache)
+      d_bn_out = relu_backward(d_relu_out, relu_cache)
       d_fc_out, dgamma, dbeta = batchnorm_backward_alt(d_bn_out, bn_cache)
       dx, dw, db = affine_backward(d_fc_out, fc_cache)
       return dx, dw, db, dgamma, dbeta
