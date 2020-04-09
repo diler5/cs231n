@@ -582,13 +582,30 @@ def conv_forward_naive(x, w, b, conv_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    [stride, pad] = [conv_param[k] for k in ['stride', 'pad']] # load parameters
+    N, C, H, W = x.shape
+    F, _, HH, WW = w.shape
+    OH = int(1 + (H + 2 * pad - HH) / stride)
+    OW = int(1 + (W + 2 * pad - WW) / stride)
+    x_padded = np.zeros([N, C, H + 2 * pad, W + 2 * pad])
+    x_padded[:, :, pad : pad + H, pad : pad + W] = x
+
+    # initialize output:
+    out = np.zeros([N, F, OH, OW])
+
+    # compute output:
+    for f in range(F):
+      for i in range(OH):
+        for j in range(OW):
+          x_window = x_padded[:, :, stride * i : stride * i + HH, stride * j : stride * j + WW]
+          x_filtered = (x_window * w[f]).sum(3).sum(2).sum(1)
+          out[:, f, i, j] = x_filtered + b[f]
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
-    cache = (x, w, b, conv_param)
+    cache = (x_padded, w, b, conv_param)
     return out, cache
 
 
@@ -611,7 +628,35 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x_pad, w, b, conv_param = cache
+    N, F, outH, outW = dout.shape
+    _, C, Hpad, Wpad = x_pad.shape
+    FH, FW = w.shape[2], w.shape[3]
+    stride = conv_param['stride']
+    pad = conv_param['pad']
+
+    # initialize gradients
+    dx = np.zeros((N, C, Hpad - 2*pad, Wpad - 2*pad))
+    dw, db = np.zeros(w.shape), np.zeros(b.shape)
+
+    # create w_row matrix
+    w_row = w.reshape(F, C*FH*FW)                            #[F x C*FH*FW]
+
+    # create x_col matrix with values that each neuron is connected to
+    x_col = np.zeros((C*FH*FW, outH*outW))                   #[C*FH*FW x H'*W']
+    for index in range(N):
+        out_col = dout[index].reshape(F, outH*outW)          #[F x H'*W']
+        w_out = w_row.T.dot(out_col)                         #[C*FH*FW x H'*W']
+        dx_cur = np.zeros((C, Hpad, Wpad))
+        neuron = 0
+        for i in range(0, Hpad-FH+1, stride):
+            for j in range(0, Wpad-FW+1, stride):
+                dx_cur[:,i:i+FH,j:j+FW] += w_out[:,neuron].reshape(C,FH,FW)
+                x_col[:,neuron] = x_pad[index,:,i:i+FH,j:j+FW].reshape(C*FH*FW)
+                neuron += 1
+        dx[index] = dx_cur[:,pad:-pad, pad:-pad]
+        dw += out_col.dot(x_col.T).reshape(F,C,FH,FW)
+        db += out_col.sum(axis=1)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -645,7 +690,17 @@ def max_pool_forward_naive(x, pool_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    [pool_height, pool_width, stride] = [pool_param[k] for k in ['pool_height', 'pool_width', 'stride']]
+    N, C, H, W = x.shape
+    OH = int(1 + (H - pool_height) / stride)
+    OW = int(1 + (W - pool_width) / stride)
+
+    # Compute output:
+    out = np.zeros([N, C, OH, OW])
+    for i in range(OH):
+      for j in range(OW):
+        x_window = x[:, :, i * stride : i * stride + pool_height, j * stride : j * stride + pool_width]
+        out[:, :, i, j] = x_window.max(3).max(2)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -672,7 +727,23 @@ def max_pool_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x, pool_param = cache
+    [PH, PW, stride] = [pool_param[k] for k in ['pool_height', 'pool_width', 'stride']]
+    N, C, H, W = x.shape
+    OH = int(1 + (H - PH) / stride)
+    OW = int(1 + (W - PW) / stride)
+
+    # Compute gradient:
+    dx = np.zeros_like(x)
+    for n in range(N):
+      for c in range(C):
+        for i in range(OH):
+          for j in range(OW):
+            window_i, window_j = (i * stride, j * stride)
+            x_window = x[n, c, window_i : window_i + PH, window_j : window_j + PW]
+            [relative_i, relative_j] = np.unravel_index(np.argmax(x_window), x_window.shape)
+            # print('dx[{0}, {1}, {2}, {3}] += {4}'.format(n, c, window_i + relative_i, window_j + relative_j, dout[n, c, i, j]))
+            dx[n, c, window_i + relative_i, window_j + relative_j] += dout[n, c, i, j]
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
