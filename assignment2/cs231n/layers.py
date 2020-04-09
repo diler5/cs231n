@@ -785,7 +785,10 @@ def spatial_batchnorm_forward(x, gamma, beta, bn_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = x.shape
+    x_rows = x.transpose(0, 2, 3, 1).reshape(-1, C)
+    out_rows, cache = batchnorm_forward(x_rows, gamma, beta, bn_param)
+    out = out_rows.reshape(N, H, W, C).transpose(0, 3, 1, 2)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
