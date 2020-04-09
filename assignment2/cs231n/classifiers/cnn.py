@@ -55,7 +55,14 @@ class ThreeLayerConvNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        C, H, W = input_dim
+        HP, WP = int(1 + (H - 2)/2), int(1 + (W - 2)/2)  # max pooling
+        self.params['W1'] = weight_scale * np.random.randn(num_filters, C, filter_size, filter_size)
+        self.params['b1'] = np.zeros(num_filters)
+        self.params['W2'] = weight_scale * np.random.randn(num_filters*HP*WP, hidden_dim)
+        self.params['b2'] = np.zeros(hidden_dim)
+        self.params['W3'] = weight_scale * np.random.randn(hidden_dim, num_classes)
+        self.params['b3'] = np.zeros(num_classes)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -95,7 +102,9 @@ class ThreeLayerConvNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        h1, cache1 = conv_relu_pool_forward(X, W1, b1, conv_param, pool_param)
+        h2, cache2 = affine_relu_forward(h1, W2, b2)
+        scores, cache3 = affine_forward(h2, W3, b3)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -118,8 +127,23 @@ class ThreeLayerConvNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
-
+        loss, dscores = softmax_loss(scores, y)
+        dh2, dW3, db3 = affine_backward(dscores, cache3)
+        dh1, dW2, db2 = affine_relu_backward(dh2, cache2)
+        dx, dW1, db1 = conv_relu_pool_backward(dh1, cache1)
+        # regularization:
+        loss += self.reg * 0.5 * (np.sum(W1**2) + np.sum(W2**2) + np.sum(W3**2))
+        dW1 += self.reg * W1
+        dW2 += self.reg * W2
+        dW3 += self.reg * W3
+        # store gradient results:
+        grads['W1'] = dW1
+        grads['W2'] = dW2
+        grads['W3'] = dW3
+        grads['b1'] = db1
+        grads['b2'] = db2
+        grads['b3'] = db3
+        
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
