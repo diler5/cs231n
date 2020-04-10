@@ -786,9 +786,9 @@ def spatial_batchnorm_forward(x, gamma, beta, bn_param):
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
     N, C, H, W = x.shape
-    x_rows = x.transpose(0, 2, 3, 1).reshape(-1, C)
-    out_rows, cache = batchnorm_forward(x_rows, gamma, beta, bn_param)
-    out = out_rows.reshape(N, H, W, C).transpose(0, 3, 1, 2)
+    x_channels = x.transpose(0, 2, 3, 1).reshape(-1, C)
+    out_channels, cache = batchnorm_forward(x_channels, gamma, beta, bn_param)
+    out = out_channels.reshape(N, H, W, C).transpose(0, 3, 1, 2)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -822,7 +822,10 @@ def spatial_batchnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = dout.shape
+    dout_channels = dout.transpose(0, 2, 3, 1).reshape(-1, C)
+    dx_channels, dgamma, dbeta = batchnorm_backward(dout_channels, cache)
+    dx = dx_channels.reshape(N, H, W, C).transpose(0, 3, 1, 2)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -862,7 +865,20 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = x.shape
+    size = (N * G, C // G * H * W)
+    x = x.reshape(size)
+    # similar to batch normalization
+    mu = x.mean(axis=1)
+    var = x.var(axis=1) + eps
+    std = np.sqrt(var)
+    z = (x - mu.reshape(-1, 1)) / std.reshape(-1, 1)
+    z = z.reshape(N, C, H, W)
+    gamma = gamma.reshape(1, -1, 1, 1)
+    beta = beta.reshape(1, -1, 1, 1)
+    out = gamma * z + beta
+    # save values for backward call
+    cache={'std':std, 'gamma':gamma, 'z':z, 'size':size}
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -892,7 +908,37 @@ def spatial_groupnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    # N, C, H, W = dout.shape
+    # size = cache['size']
+    # dbeta = dout.sum(axis=(0,2,3), keepdims=True)
+    # dgamma = np.sum(dout * cache['z'], axis=(0,2,3), keepdims=True)
+
+    # # reshape tensors
+    # z = cache['z'].reshape(size).T
+    # M = z.shape[0]
+    # dfdz = dout * cache['gamma']
+    # dfdz = dfdz.reshape(size).T
+    # # copy from batch normalization backward alt
+    # dfdz_sum = np.sum(dfdz,axis=0)
+    # dx = dfdz - dfdz_sum/M - np.sum(dfdz * z,axis=0) * z/M
+    # dx /= cache['std']
+    # dx = dx.T.reshape(N, C, H, W)
+
+    N, C, H, W = dout.shape
+    size = cache['size']
+    dbeta = dout.sum(axis=(0,2,3), keepdims=True)
+    dgamma = np.sum(dout * cache['z'], axis=(0,2,3), keepdims=True)
+
+    # reshape tensors
+    z = cache['z'].reshape(size).T
+    M = z.shape[0]
+    dfdz = dout * cache['gamma']
+    dfdz = dfdz.reshape(size).T
+    # copy from batch normalization backward alt
+    dfdz_sum = np.sum(dfdz,axis=0)
+    dx = dfdz - dfdz_sum/M - np.sum(dfdz * z,axis=0) * z/M
+    dx /= cache['std']
+    dx = dx.T.reshape(N, C, H, W)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
